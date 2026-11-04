@@ -1,0 +1,125 @@
+@startuml 01_modelo_inicial
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+title SIGEB — modelo inicial (semana 1, sin patrones GoF)
+
+package "presentacion" {
+  class MenuConsola {
+    +ejecutar()
+  }
+}
+
+package "aplicacion" {
+  class ServicioCatalogo {
+    +registrar_libro(isbn, titulo, autor, categoria, ejemplares)
+    +listar()
+    +buscar(isbn, titulo, autor)
+    +consultar_disponibilidad(isbn)
+    +agregar_ejemplares(isbn, cantidad)
+  }
+  class ServicioUsuarios {
+    +registrar_usuario(id_usuario, nombre, tipo, activo)
+    +listar()
+    +obtener(id_usuario)
+  }
+  class ServicioPrestamos {
+    +prestar(isbn, id_usuario, hoy)
+    +devolver(id_prestamo, hoy)
+    +historial(id_usuario)
+    +consultar(estado, hoy)
+  }
+}
+
+package "dominio" {
+  class Libro {
+    isbn
+    titulo
+    autor
+    categoria
+    ejemplares_totales
+    ejemplares_disponibles
+    +descontar()
+    +reponer()
+    +agregar_ejemplares(cantidad)
+  }
+  class Usuario {
+    id_usuario
+    nombre
+    tipo
+    activo
+  }
+  class Prestamo {
+    id_prestamo
+    isbn_libro
+    id_usuario
+    fecha_inicio
+    fecha_limite
+    fecha_devolucion
+    +esta_activo()
+    +esta_devuelto()
+    +esta_vencido(hoy)
+    +marcar_devuelto(hoy)
+  }
+  class ErrorDominio
+}
+
+package "infraestructura" {
+  class RepositorioLibros {
+    +guardar(libro)
+    +obtener(isbn)
+    +existe(isbn)
+    +listar()
+  }
+  class RepositorioUsuarios {
+    +guardar(usuario)
+    +obtener(id_usuario)
+    +existe(id_usuario)
+    +listar()
+  }
+  class RepositorioPrestamos {
+    +siguiente_id()
+    +guardar(prestamo)
+    +eliminar(id_prestamo)
+    +obtener(id_prestamo)
+    +listar()
+  }
+}
+
+MenuConsola --> ServicioCatalogo
+MenuConsola --> ServicioUsuarios
+MenuConsola --> ServicioPrestamos
+
+ServicioCatalogo --> RepositorioLibros
+ServicioCatalogo ..> Libro
+
+ServicioUsuarios --> RepositorioUsuarios
+ServicioUsuarios ..> Usuario
+
+ServicioPrestamos --> RepositorioPrestamos
+ServicioPrestamos --> RepositorioLibros
+ServicioPrestamos --> RepositorioUsuarios
+ServicioPrestamos ..> Prestamo
+
+RepositorioLibros o-- "0..*" Libro
+RepositorioUsuarios o-- "0..*" Usuario
+RepositorioPrestamos o-- "0..*" Prestamo
+
+Prestamo ..> Libro : isbn_libro
+Prestamo ..> Usuario : id_usuario
+
+note bottom of ServicioPrestamos
+  Plazo fijo de 7 días.
+  La fecha límite se calcula con el parámetro hoy.
+  Validar, guardar el préstamo y después descontar.
+  Si descontar falla, se elimina el préstamo.
+end note
+
+note bottom of ErrorDominio
+  IsbnDuplicado, LibroNoEncontrado,
+  UsuarioDuplicado, UsuarioNoEncontrado,
+  UsuarioInactivo, SinDisponibilidad,
+  PrestamoNoEncontrado, PrestamoYaDevuelto,
+  DatosInvalidos.
+end note
+
+@enduml
