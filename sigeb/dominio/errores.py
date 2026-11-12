@@ -71,3 +71,7 @@ class PrestamoYaDevuelto(ErrorDominio):
     def __init__(self, id_prestamo: str) -> None:
         self.id_prestamo = id_prestamo
         super().__init__(f"El préstamo {id_prestamo} ya fue devuelto.")
+
+
+class ErrorNotificacion(ErrorDominio):
+    """El canal no pudo entregar el mensaje. No deshace un préstamo ya confirmado."""

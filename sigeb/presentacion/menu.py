@@ -1,10 +1,13 @@
 """Menú de consola. Traduce entradas en llamadas y muestra respuestas."""
 
+import sys
 from collections.abc import Callable
 from datetime import date
 
 from sigeb.aplicacion.catalogo import ServicioCatalogo
+from sigeb.aplicacion.notificaciones import ServicioNotificaciones
 from sigeb.aplicacion.prestamos import ServicioPrestamos
+from sigeb.aplicacion.reportes import ServicioReportes
 from sigeb.aplicacion.usuarios import ServicioUsuarios
 from sigeb.dominio.errores import DatosInvalidos, ErrorDominio
 from sigeb.dominio.libro import Libro
@@ -18,6 +21,8 @@ class MenuConsola:
         catalogo: ServicioCatalogo,
         usuarios: ServicioUsuarios,
         prestamos: ServicioPrestamos,
+        notificaciones: ServicioNotificaciones,
+        reportes: ServicioReportes,
         entrada: Callable[[str], str] = input,
         salida: Callable[[str], None] = print,
         hoy: Callable[[], date] | None = None,
@@ -25,6 +30,8 @@ class MenuConsola:
         self._catalogo = catalogo
         self._usuarios = usuarios
         self._prestamos = prestamos
+        self._notificaciones = notificaciones
+        self._reportes = reportes
         self._entrada = entrada
         self._salida = salida
         self._hoy = hoy or date.today
@@ -45,6 +52,8 @@ class MenuConsola:
             self._escribir("9. Prestar ejemplar")
             self._escribir("10. Devolver préstamo")
             self._escribir("11. Consultar préstamos")
+            self._escribir("12. Enviar notificación")
+            self._escribir("13. Generar reporte")
             self._escribir("0. Salir")
             try:
                 opcion = self._leer("Opción: ")
@@ -63,6 +72,8 @@ class MenuConsola:
                 "9": self._prestar,
                 "10": self._devolver,
                 "11": self._consultar_prestamos,
+                "12": self._enviar_notificacion,
+                "13": self._generar_reporte,
                 "0": self._salir,
             }.get(opcion)
             if accion is None:
@@ -75,6 +86,12 @@ class MenuConsola:
             except EOFError:
                 self._escribir("")
                 return
+            if opcion != "0":
+                try:
+                    self._pausar()
+                except EOFError:
+                    self._escribir("")
+                    return
 
     def _registrar_libro(self) -> None:
         isbn = self._leer("ISBN: ")
@@ -88,7 +105,12 @@ class MenuConsola:
         self._escribir(f"Libro registrado. {self._formato_libro(libro)}")
 
     def _listar_libros(self) -> None:
-        self._escribir_libros(self._catalogo.listar())
+        libros = self._catalogo.listar()
+        if not libros:
+            self._escribir("No hay libros para mostrar.")
+            return
+        self._escribir(f"Libros registrados: {len(libros)}")
+        self._escribir_libros(libros)
 
     def _buscar_libro(self) -> None:
         self._escribir("Buscar por: 1) ISBN  2) título  3) autor")
@@ -131,6 +153,7 @@ class MenuConsola:
         if not usuarios:
             self._escribir("No hay usuarios registrados.")
             return
+        self._escribir(f"Usuarios registrados: {len(usuarios)}")
         for usuario in usuarios:
             self._escribir(self._formato_usuario(usuario))
 
@@ -155,6 +178,29 @@ class MenuConsola:
         prestamos = self._prestamos.consultar(self._leer("Estado: "), self._fecha())
         self._escribir_prestamos(prestamos)
 
+    def _enviar_notificacion(self) -> None:
+        canales = ", ".join(self._notificaciones.canales)
+        self._escribir(f"Canal ({canales})")
+        canal = self._leer("Canal: ")
+        destino = self._leer("Destino (vacío si el canal es consola): ")
+        mensaje = self._leer("Mensaje: ")
+        enviado = self._notificaciones.enviar(canal, mensaje, destino or None)
+        self._escribir(f"Notificación enviada por {enviado}.")
+
+    def _generar_reporte(self) -> None:
+        titulo = self._leer("Título: ")
+        resumen = self._leer_si_no("¿Incluir resumen? (s/n) [s]: ")
+        if resumen is None:
+            return
+        detalle = self._leer_si_no("¿Incluir detalle? (s/n) [s]: ")
+        if detalle is None:
+            return
+        pie = self._leer_si_no("¿Incluir pie? (s/n) [s]: ")
+        if pie is None:
+            return
+        reporte = self._reportes.generar(titulo, resumen, detalle, pie, self._fecha())
+        self._escribir(reporte.texto())
+
     def _salir(self) -> None:
         self._seguir = False
         self._escribir("Hasta luego.")
@@ -164,6 +210,9 @@ class MenuConsola:
 
     def _leer(self, etiqueta: str) -> str:
         return self._entrada(etiqueta).strip()
+
+    def _pausar(self) -> None:
+        self._leer("Presione Enter para continuar...")
 
     def _leer_entero(self, etiqueta: str) -> int | None:
         texto = self._leer(etiqueta)
@@ -184,6 +233,8 @@ class MenuConsola:
 
     def _escribir(self, mensaje: str) -> None:
         self._salida(mensaje)
+        if self._salida is print:
+            sys.stdout.flush()
 
     def _escribir_libros(self, libros: list[Libro]) -> None:
         if not libros:
