@@ -1,3 +1,3 @@
 """SIGEB: sistema de gestión de biblioteca en consola."""
 
-__version__ = "3"
+__version__ = "5"

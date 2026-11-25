@@ -1,0 +1,38 @@
+@startuml 03_prestamo_secuencia
+skinparam classAttributeIconSize 0
+title SIGEB — secuencia de préstamo y publicación del evento
+
+actor Usuario
+participant MenuConsola
+participant BibliotecaFacade
+participant ServicioPrestamos
+participant PoliticaPrestamo
+participant RepositorioPrestamos
+participant Libro
+participant CentroEventos
+participant ObservadorNotificacion
+participant ServicioNotificaciones
+
+Usuario -> MenuConsola : opción 9, ISBN, id, hoy
+MenuConsola -> BibliotecaFacade : prestar(isbn, id, hoy)
+BibliotecaFacade -> ServicioPrestamos : prestar(isbn, id, hoy)
+ServicioPrestamos -> PoliticaPrestamo : dias_permitidos()
+PoliticaPrestamo --> ServicioPrestamos : días
+ServicioPrestamos -> PoliticaPrestamo : maximo_activos()
+PoliticaPrestamo --> ServicioPrestamos : cupo
+ServicioPrestamos -> RepositorioPrestamos : guardar(prestamo)
+ServicioPrestamos -> Libro : descontar()
+ServicioPrestamos -> CentroEventos : publicar(evento)
+CentroEventos -> ObservadorNotificacion : actualizar(evento)
+ObservadorNotificacion -> ServicioNotificaciones : enviar(mensaje)
+note right of ObservadorNotificacion
+  Un observador no suscrito
+  no recibe actualizar().
+  Si el envío falla, el préstamo
+  ya guardado permanece.
+end note
+ServicioPrestamos --> BibliotecaFacade : Prestamo
+BibliotecaFacade --> MenuConsola : Prestamo
+MenuConsola --> Usuario : préstamo registrado
+
+@enduml

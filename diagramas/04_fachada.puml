@@ -1,0 +1,50 @@
+@startuml 04_fachada
+skinparam classAttributeIconSize 0
+title SIGEB — fachada (etapa 4)
+
+class MenuConsola {
+  +ejecutar()
+}
+
+class BibliotecaFacade {
+  +prestar(isbn, id_usuario, hoy)
+  +devolver(id_prestamo, hoy)
+  +registrar_libro(...)
+  +registrar_usuario(...)
+  +enviar_notificacion(...)
+  +generar_reporte(...)
+}
+
+package subsistema {
+  class ServicioCatalogo
+  class ServicioUsuarios
+  class ServicioPrestamos
+  class ServicioNotificaciones
+  class ServicioReportes
+}
+
+class RepositorioLibros
+class RepositorioUsuarios
+class RepositorioPrestamos
+
+MenuConsola --> BibliotecaFacade : única puerta
+
+BibliotecaFacade --> ServicioCatalogo
+BibliotecaFacade --> ServicioUsuarios
+BibliotecaFacade --> ServicioPrestamos
+BibliotecaFacade --> ServicioNotificaciones
+BibliotecaFacade --> ServicioReportes
+
+ServicioCatalogo --> RepositorioLibros
+ServicioUsuarios --> RepositorioUsuarios
+ServicioPrestamos --> RepositorioPrestamos
+ServicioPrestamos --> RepositorioLibros
+ServicioPrestamos --> RepositorioUsuarios
+
+note bottom of MenuConsola
+  No importa repositorios
+  ni servicios internos.
+  Prestar es biblioteca.prestar(...).
+end note
+
+@enduml

@@ -1,12 +1,15 @@
-"""Casos de uso de préstamo y devolución (RF-08 a RF-14).
+"""Casos de uso de préstamo y devolución (RF-08 a RF-14, RF-17, RF-19 y RF-20).
 
-Semana 1: el plazo es fijo. En la semana 7 lo resuelve una política Strategy.
+El plazo y el cupo los resuelve una política Strategy. Al confirmar la
+operación se publica un evento; quien no está suscrito no se entera.
 """
 
 from datetime import date, timedelta
 
 from sigeb.dominio.errores import (
+    CupoAgotado,
     DatosInvalidos,
+    ErrorDominio,
     LibroNoEncontrado,
     PrestamoNoEncontrado,
     PrestamoYaDevuelto,
@@ -14,12 +17,13 @@ from sigeb.dominio.errores import (
     UsuarioInactivo,
     UsuarioNoEncontrado,
 )
+from sigeb.dominio.politicas import politica_para
 from sigeb.dominio.prestamo import Prestamo
 from sigeb.infraestructura.repositorio_libros import RepositorioLibros
 from sigeb.infraestructura.repositorio_prestamos import RepositorioPrestamos
 from sigeb.infraestructura.repositorio_usuarios import RepositorioUsuarios
+from sigeb.notificaciones.eventos import CentroEventos, Evento
 
-PLAZO_DIAS = 7
 ESTADOS = ("activo", "devuelto", "vencido")
 
 
@@ -29,23 +33,27 @@ class ServicioPrestamos:
         prestamos: RepositorioPrestamos,
         libros: RepositorioLibros,
         usuarios: RepositorioUsuarios,
+        eventos: CentroEventos | None = None,
     ) -> None:
         self._prestamos = prestamos
         self._libros = libros
         self._usuarios = usuarios
+        self._eventos = eventos if eventos is not None else CentroEventos()
 
     def prestar(self, isbn: str, id_usuario: str, hoy: date) -> Prestamo:
-        """Valida, guarda el préstamo y después descuenta un ejemplar.
+        """Valida, guarda el préstamo, descuenta un ejemplar y publica el evento.
 
-        Si descontar falla, el préstamo guardado se elimina. Así el inventario
-        y el historial no quedan a medias (RN-12). `hoy` llega desde afuera:
-        este servicio no consulta el reloj (RN-11).
+        Si descontar falla, el préstamo guardado se elimina (RN-12). Un fallo
+        al avisar no deshace el préstamo (RN-13). `hoy` llega desde afuera (RN-11).
         """
         fecha = _fecha(hoy)
         libro = self._libro(isbn)
         usuario = self._usuario(id_usuario)
         if not usuario.activo:
             raise UsuarioInactivo(usuario.id_usuario)
+        politica = politica_para(usuario.tipo)
+        if self._activos(usuario.id_usuario) >= politica.maximo_activos():
+            raise CupoAgotado(usuario.id_usuario, politica.maximo_activos())
         if libro.ejemplares_disponibles <= 0:
             raise SinDisponibilidad(libro.isbn)
 
@@ -54,7 +62,7 @@ class ServicioPrestamos:
             isbn_libro=libro.isbn,
             id_usuario=usuario.id_usuario,
             fecha_inicio=fecha,
-            fecha_limite=fecha + timedelta(days=PLAZO_DIAS),
+            fecha_limite=fecha + timedelta(days=politica.dias_permitidos()),
         )
         self._prestamos.guardar(prestamo)
         try:
@@ -62,10 +70,11 @@ class ServicioPrestamos:
         except Exception:
             self._prestamos.eliminar(prestamo.id_prestamo)
             raise
+        self._publicar("prestamo", prestamo)
         return prestamo
 
     def devolver(self, id_prestamo: str, hoy: date) -> Prestamo:
-        """Marca la devolución y repone un ejemplar.
+        """Marca la devolución, repone un ejemplar y publica el evento.
 
         Una segunda devolución falla antes de tocar el inventario (RN-06, RN-07).
         """
@@ -80,6 +89,7 @@ class ServicioPrestamos:
         except Exception:
             prestamo.fecha_devolucion = None
             raise
+        self._publicar("devolucion", prestamo)
         return prestamo
 
     def historial(self, id_usuario: str) -> list[Prestamo]:
@@ -139,6 +149,37 @@ class ServicioPrestamos:
         if prestamo is None:
             raise PrestamoNoEncontrado(id_prestamo.strip())
         return prestamo
+
+    def _activos(self, id_usuario: str) -> int:
+        return sum(
+            1
+            for prestamo in self._prestamos.listar()
+            if prestamo.id_usuario == id_usuario and prestamo.esta_activo()
+        )
+
+    def _publicar(self, tipo: str, prestamo: Prestamo) -> None:
+        if tipo == "prestamo":
+            mensaje = (
+                f"Préstamo {prestamo.id_prestamo}: ISBN {prestamo.isbn_libro} "
+                f"para {prestamo.id_usuario}, hasta {prestamo.fecha_limite.isoformat()}."
+            )
+        else:
+            mensaje = (
+                f"Devolución {prestamo.id_prestamo}: ISBN {prestamo.isbn_libro} "
+                f"del usuario {prestamo.id_usuario}."
+            )
+        try:
+            self._eventos.publicar(
+                Evento(
+                    tipo,
+                    prestamo.id_prestamo,
+                    prestamo.isbn_libro,
+                    prestamo.id_usuario,
+                    mensaje,
+                )
+            )
+        except ErrorDominio:
+            return
 
 
 def _fecha(valor: date) -> date:

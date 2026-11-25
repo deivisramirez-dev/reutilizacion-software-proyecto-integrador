@@ -1,6 +1,7 @@
 """Punto de entrada de SIGEB. Arma repositorios, servicios y menú."""
 
 from sigeb.aplicacion.catalogo import ServicioCatalogo
+from sigeb.aplicacion.fachada_biblioteca import BibliotecaFacade
 from sigeb.aplicacion.notificaciones import ServicioNotificaciones
 from sigeb.aplicacion.prestamos import ServicioPrestamos
 from sigeb.aplicacion.reportes import ServicioReportes
@@ -9,6 +10,7 @@ from sigeb.infraestructura.proveedor_sms_simulado import ProveedorSMSSimulado
 from sigeb.infraestructura.repositorio_libros import RepositorioLibros
 from sigeb.infraestructura.repositorio_prestamos import RepositorioPrestamos
 from sigeb.infraestructura.repositorio_usuarios import RepositorioUsuarios
+from sigeb.notificaciones.eventos import CentroEventos, ObservadorNotificacion
 from sigeb.presentacion.menu import MenuConsola
 
 
@@ -18,14 +20,20 @@ def construir_menu() -> MenuConsola:
     prestamos = RepositorioPrestamos()
     catalogo = ServicioCatalogo(libros)
     servicio_usuarios = ServicioUsuarios(usuarios)
-    servicio_prestamos = ServicioPrestamos(prestamos, libros, usuarios)
-    return MenuConsola(
+    notificaciones = ServicioNotificaciones(ProveedorSMSSimulado())
+    eventos = CentroEventos()
+    eventos.suscribir(
+        ObservadorNotificacion(lambda mensaje: notificaciones.enviar("consola", mensaje))
+    )
+    servicio_prestamos = ServicioPrestamos(prestamos, libros, usuarios, eventos)
+    fachada = BibliotecaFacade(
         catalogo,
         servicio_usuarios,
         servicio_prestamos,
-        ServicioNotificaciones(ProveedorSMSSimulado()),
+        notificaciones,
         ServicioReportes(catalogo, servicio_usuarios, servicio_prestamos),
     )
+    return MenuConsola(fachada)
 
 
 def main() -> None:

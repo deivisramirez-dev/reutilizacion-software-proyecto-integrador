@@ -4,34 +4,22 @@ import sys
 from collections.abc import Callable
 from datetime import date
 
-from sigeb.aplicacion.catalogo import ServicioCatalogo
-from sigeb.aplicacion.notificaciones import ServicioNotificaciones
-from sigeb.aplicacion.prestamos import ServicioPrestamos
-from sigeb.aplicacion.reportes import ServicioReportes
-from sigeb.aplicacion.usuarios import ServicioUsuarios
+from sigeb.aplicacion.fachada_biblioteca import BibliotecaFacade
 from sigeb.dominio.errores import DatosInvalidos, ErrorDominio
 from sigeb.dominio.libro import Libro
 from sigeb.dominio.prestamo import Prestamo
-from sigeb.dominio.usuario import TIPOS_USUARIO, Usuario
+from sigeb.dominio.usuario import Usuario
 
 
 class MenuConsola:
     def __init__(
         self,
-        catalogo: ServicioCatalogo,
-        usuarios: ServicioUsuarios,
-        prestamos: ServicioPrestamos,
-        notificaciones: ServicioNotificaciones,
-        reportes: ServicioReportes,
+        biblioteca: BibliotecaFacade,
         entrada: Callable[[str], str] = input,
         salida: Callable[[str], None] = print,
         hoy: Callable[[], date] | None = None,
     ) -> None:
-        self._catalogo = catalogo
-        self._usuarios = usuarios
-        self._prestamos = prestamos
-        self._notificaciones = notificaciones
-        self._reportes = reportes
+        self._biblioteca = biblioteca
         self._entrada = entrada
         self._salida = salida
         self._hoy = hoy or date.today
@@ -101,11 +89,11 @@ class MenuConsola:
         ejemplares = self._leer_entero("Ejemplares: ")
         if ejemplares is None:
             return
-        libro = self._catalogo.registrar_libro(isbn, titulo, autor, categoria, ejemplares)
+        libro = self._biblioteca.registrar_libro(isbn, titulo, autor, categoria, ejemplares)
         self._escribir(f"Libro registrado. {self._formato_libro(libro)}")
 
     def _listar_libros(self) -> None:
-        libros = self._catalogo.listar()
+        libros = self._biblioteca.listar_libros()
         if not libros:
             self._escribir("No hay libros para mostrar.")
             return
@@ -116,17 +104,17 @@ class MenuConsola:
         self._escribir("Buscar por: 1) ISBN  2) título  3) autor")
         criterio = self._leer("Criterio: ")
         if criterio == "1":
-            libros = self._catalogo.buscar(isbn=self._leer("ISBN: "))
+            libros = self._biblioteca.buscar_libro(isbn=self._leer("ISBN: "))
         elif criterio == "2":
-            libros = self._catalogo.buscar(titulo=self._leer("Título: "))
+            libros = self._biblioteca.buscar_libro(titulo=self._leer("Título: "))
         elif criterio == "3":
-            libros = self._catalogo.buscar(autor=self._leer("Autor: "))
+            libros = self._biblioteca.buscar_libro(autor=self._leer("Autor: "))
         else:
             raise DatosInvalidos("El criterio debe ser 1, 2 o 3.")
         self._escribir_libros(libros)
 
     def _consultar_disponibilidad(self) -> None:
-        libro = self._catalogo.consultar_disponibilidad(self._leer("ISBN: "))
+        libro = self._biblioteca.consultar_disponibilidad(self._leer("ISBN: "))
         self._escribir(self._formato_libro(libro))
 
     def _agregar_ejemplares(self) -> None:
@@ -134,22 +122,22 @@ class MenuConsola:
         cantidad = self._leer_entero("Cantidad: ")
         if cantidad is None:
             return
-        libro = self._catalogo.agregar_ejemplares(isbn, cantidad)
+        libro = self._biblioteca.agregar_ejemplares(isbn, cantidad)
         self._escribir(f"Ejemplares actualizados. {self._formato_libro(libro)}")
 
     def _registrar_usuario(self) -> None:
         id_usuario = self._leer("Id: ")
         nombre = self._leer("Nombre: ")
-        self._escribir(f"Tipo ({', '.join(TIPOS_USUARIO)})")
+        self._escribir(f"Tipo ({', '.join(self._biblioteca.tipos_usuario)})")
         tipo = self._leer("Tipo: ")
         activo = self._leer_si_no("¿Activo? (s/n) [s]: ")
         if activo is None:
             return
-        usuario = self._usuarios.registrar_usuario(id_usuario, nombre, tipo, activo)
+        usuario = self._biblioteca.registrar_usuario(id_usuario, nombre, tipo, activo)
         self._escribir(f"Usuario registrado. {self._formato_usuario(usuario)}")
 
     def _listar_usuarios(self) -> None:
-        usuarios = self._usuarios.listar()
+        usuarios = self._biblioteca.listar_usuarios()
         if not usuarios:
             self._escribir("No hay usuarios registrados.")
             return
@@ -158,11 +146,11 @@ class MenuConsola:
             self._escribir(self._formato_usuario(usuario))
 
     def _historial(self) -> None:
-        prestamos = self._prestamos.historial(self._leer("Id de usuario: "))
+        prestamos = self._biblioteca.historial(self._leer("Id de usuario: "))
         self._escribir_prestamos(prestamos)
 
     def _prestar(self) -> None:
-        prestamo = self._prestamos.prestar(
+        prestamo = self._biblioteca.prestar(
             self._leer("ISBN: "),
             self._leer("Id de usuario: "),
             self._fecha(),
@@ -170,21 +158,21 @@ class MenuConsola:
         self._escribir(f"Préstamo registrado. {self._formato_prestamo(prestamo)}")
 
     def _devolver(self) -> None:
-        prestamo = self._prestamos.devolver(self._leer("Id de préstamo: "), self._fecha())
+        prestamo = self._biblioteca.devolver(self._leer("Id de préstamo: "), self._fecha())
         self._escribir(f"Devolución registrada. {self._formato_prestamo(prestamo)}")
 
     def _consultar_prestamos(self) -> None:
         self._escribir("Estado: activo, devuelto o vencido")
-        prestamos = self._prestamos.consultar(self._leer("Estado: "), self._fecha())
+        prestamos = self._biblioteca.consultar_prestamos(self._leer("Estado: "), self._fecha())
         self._escribir_prestamos(prestamos)
 
     def _enviar_notificacion(self) -> None:
-        canales = ", ".join(self._notificaciones.canales)
+        canales = ", ".join(self._biblioteca.canales)
         self._escribir(f"Canal ({canales})")
         canal = self._leer("Canal: ")
         destino = self._leer("Destino (vacío si el canal es consola): ")
         mensaje = self._leer("Mensaje: ")
-        enviado = self._notificaciones.enviar(canal, mensaje, destino or None)
+        enviado = self._biblioteca.enviar_notificacion(canal, mensaje, destino or None)
         self._escribir(f"Notificación enviada por {enviado}.")
 
     def _generar_reporte(self) -> None:
@@ -198,7 +186,9 @@ class MenuConsola:
         pie = self._leer_si_no("¿Incluir pie? (s/n) [s]: ")
         if pie is None:
             return
-        reporte = self._reportes.generar(titulo, resumen, detalle, pie, self._fecha())
+        reporte = self._biblioteca.generar_reporte(
+            titulo, resumen, detalle, pie, self._fecha()
+        )
         self._escribir(reporte.texto())
 
     def _salir(self) -> None:

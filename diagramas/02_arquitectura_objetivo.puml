@@ -1,0 +1,62 @@
+@startuml 02_arquitectura_objetivo
+skinparam classAttributeIconSize 0
+title SIGEB — arquitectura con los seis patrones
+
+class MenuConsola
+
+class BibliotecaFacade <<Facade>>
+
+package aplicacion {
+  class ServicioCatalogo
+  class ServicioUsuarios
+  class ServicioPrestamos
+  class ServicioNotificaciones
+  class ServicioReportes
+}
+
+package dominio {
+  class PoliticaPrestamo <<Strategy>>
+  class PoliticaEstudiante
+  class PoliticaDocente
+  class PoliticaAdministrativo
+}
+
+package notificaciones {
+  class FabricaNotificacion <<Factory Method>>
+  class Notificacion
+  class AdaptadorSMS <<Adapter>>
+  class CentroEventos <<Observer>>
+  class ObservadorNotificacion
+}
+
+package reportes {
+  class ConstructorReporte <<Builder>>
+  class Reporte
+}
+
+class ProveedorSMSSimulado
+
+MenuConsola --> BibliotecaFacade
+BibliotecaFacade --> ServicioCatalogo
+BibliotecaFacade --> ServicioUsuarios
+BibliotecaFacade --> ServicioPrestamos
+BibliotecaFacade --> ServicioNotificaciones
+BibliotecaFacade --> ServicioReportes
+
+ServicioPrestamos --> PoliticaPrestamo : dias_permitidos()\nmaximo_activos()
+PoliticaPrestamo <|-- PoliticaEstudiante
+PoliticaPrestamo <|-- PoliticaDocente
+PoliticaPrestamo <|-- PoliticaAdministrativo
+
+ServicioPrestamos --> CentroEventos : publicar(evento)
+CentroEventos --> ObservadorNotificacion
+ObservadorNotificacion --> ServicioNotificaciones : enviar(mensaje)
+ServicioNotificaciones --> FabricaNotificacion : crear()
+FabricaNotificacion --> Notificacion
+Notificacion <|-- AdaptadorSMS
+AdaptadorSMS --> ProveedorSMSSimulado : despachar(numero, cuerpo)
+
+ServicioReportes --> ConstructorReporte
+ConstructorReporte --> Reporte : construir()
+
+@enduml

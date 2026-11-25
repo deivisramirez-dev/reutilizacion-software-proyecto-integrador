@@ -73,5 +73,16 @@ class PrestamoYaDevuelto(ErrorDominio):
         super().__init__(f"El préstamo {id_prestamo} ya fue devuelto.")
 
 
+class CupoAgotado(ErrorDominio):
+    """El usuario ya alcanzó el máximo de préstamos activos de su política."""
+
+    def __init__(self, id_usuario: str, maximo: int) -> None:
+        self.id_usuario = id_usuario
+        self.maximo = maximo
+        super().__init__(
+            f"El usuario {id_usuario} ya tiene {maximo} préstamos activos."
+        )
+
+
 class ErrorNotificacion(ErrorDominio):
     """El canal no pudo entregar el mensaje. No deshace un préstamo ya confirmado."""
